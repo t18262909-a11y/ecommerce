@@ -5,23 +5,8 @@
 
 const SYSTEM_PROMPT = `You are an e-commerce conversion intelligence system.
 
-<<<<<<< HEAD
-DECISION RULES:
-- Only show a message when there is a clear, meaningful trigger, such as:
-  * On a product page for more than ~5 seconds
-  * Added item(s) to cart but drifted to other pages without checking out
-  * Viewed 3+ different products (indecision signal)
-  * On cart page with items for more than ~10 seconds
-  * Returned to the same product page multiple times
-- DO NOT show a message for:
-  * Home page visits
-  * Sessions shorter than ~5 seconds
-  * Checkout page (don't interrupt a purchase in progress)
-  * Sessions with no real engagement signal
-=======
 Your job is NOT to be overly cautious.
 Your job is to estimate PURCHASE INTENT from session behavior.
->>>>>>> f5b5f16 (changes)
 
 You must evaluate intent on a scale internally and decide output accordingly.
 
@@ -56,7 +41,6 @@ If show = true:
 
 If show = false:
 { "show": false, "message": "" }`;
-
 /**
  * Build the messages array for the OpenAI chat completion call.
  * @param {object} session - session payload from the tracker

@@ -105,7 +105,6 @@ app.post('/api/session', async (req, res) => {
       return res.status(400).json({ show: false, error: 'Missing sessionId' });
     }
 
-<<<<<<< HEAD
     const timeOnSite = Number(session.time_on_site ?? 0);
 
     if (timeOnSite < Number(MIN_SESSION_SECONDS)) {
@@ -121,14 +120,6 @@ app.post('/api/session', async (req, res) => {
     }
 
     const messages = buildMessages(session);
-=======
-    // Normalize session fields for LLM
-    const normalized = normalizeSession(session);
-    const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: JSON.stringify(normalized, null, 2) },
-    ];
->>>>>>> f5b5f16 (changes)
 
     const completion = await openai.chat.completions.create({
       model: OPENAI_MODEL,
