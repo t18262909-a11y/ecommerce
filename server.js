@@ -25,7 +25,18 @@ if (!OPENAI_API_KEY) {
   process.exit(1);
 }
 
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+// Support OpenAI or OpenRouter fallback
+let openai;
+if (OPENAI_API_KEY && OPENAI_API_KEY !== 'openrouter') {
+  openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+} else {
+  // OpenRouter fallback
+  openai = new OpenAI({
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey: process.env.OPENROUTER_API_KEY || 'openrouter',
+  });
+}
 
 
 const app = express();
