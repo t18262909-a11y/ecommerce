@@ -1,4 +1,4 @@
-/* Shopify Engagement Snippet — built 2026-04-20T18:53:55.681Z */
+/* Shopify Engagement Snippet — built 2026-04-20T19:49:38.792Z */
 /* tracker.js — Shopify engagement tracker
  *
  * Usage (in theme.liquid, before </body>):
@@ -40,6 +40,8 @@
   // ---- Event buffer ----
   var events = [];
   var uniqueProducts = new Set();
+  var cartProducts = [];       // all products added to cart (URLs)
+  var lastAddedProduct = null; // most recently added product URL
 
   function pushEvent(evt) {
     evt.ts = Date.now();
@@ -148,6 +150,12 @@
     var kind = classifyClick(e.target);
     if (!kind) return;
     pushEvent({ type: 'click', element: kind, url: window.location.pathname });
+    if (kind === 'add_to_cart') {
+      lastAddedProduct = window.location.pathname;
+      if (cartProducts.indexOf(lastAddedProduct) === -1) {
+        cartProducts.push(lastAddedProduct);
+      }
+    }
     if (INSTANT_SEND_EVENTS[kind]) {
       // Small delay so Shopify can update cart state before we read it
       setTimeout(sendSession, 800);
@@ -176,6 +184,8 @@
       page_time:              Math.floor((Date.now() - pageStartTime) / 1000),
       scroll_depth:           maxScrollPct,
       unique_products_viewed: uniqueProducts.size,
+      last_added_product:     lastAddedProduct,
+      cart_products:          cartProducts.slice(),
       events:                 events.slice(),
     };
   }
@@ -251,6 +261,21 @@
     document.head.appendChild(style);
   }
 
+  function getCtaDestination() {
+    var page = classifyPage();
+    if (page === 'cart' || getCartItems() > 0) return '/cart';
+    if (page === 'product') return window.location.pathname;
+    return '/collections/all';
+  }
+
+  function getCtaLabel() {
+    var page = classifyPage();
+    if (page === 'cart') return 'View Cart';
+    if (getCartItems() > 0) return 'View Cart';
+    if (page === 'product') return 'Add to Cart';
+    return 'Shop Now';
+  }
+
   function showPopup(message) {
     if (document.getElementById('eng-popup')) return;
     injectStyles();
@@ -283,9 +308,10 @@
     p.id = 'eng-message';
     p.textContent = message;
 
-    var cta = document.createElement('button');
+    var cta = document.createElement('a');
     cta.id = 'eng-cta';
-    cta.textContent = 'Shop Now';
+    cta.textContent = getCtaLabel();
+    cta.href = getCtaDestination();
     cta.onclick = function () {
       wrap.classList.remove('eng-visible');
       setTimeout(function () { wrap.remove(); }, 350);

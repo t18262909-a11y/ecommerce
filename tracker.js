@@ -260,6 +260,21 @@
     document.head.appendChild(style);
   }
 
+  function getCtaDestination() {
+    var page = classifyPage();
+    if (page === 'cart' || getCartItems() > 0) return '/cart';
+    if (page === 'product') return window.location.pathname;
+    return '/collections/all';
+  }
+
+  function getCtaLabel() {
+    var page = classifyPage();
+    if (page === 'cart') return 'View Cart';
+    if (getCartItems() > 0) return 'View Cart';
+    if (page === 'product') return 'Add to Cart';
+    return 'Shop Now';
+  }
+
   function showPopup(message) {
     if (document.getElementById('eng-popup')) return;
     injectStyles();
@@ -292,9 +307,10 @@
     p.id = 'eng-message';
     p.textContent = message;
 
-    var cta = document.createElement('button');
+    var cta = document.createElement('a');
     cta.id = 'eng-cta';
-    cta.textContent = 'Shop Now';
+    cta.textContent = getCtaLabel();
+    cta.href = getCtaDestination();
     cta.onclick = function () {
       wrap.classList.remove('eng-visible');
       setTimeout(function () { wrap.remove(); }, 350);
