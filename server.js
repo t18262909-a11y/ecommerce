@@ -25,11 +25,8 @@ if (!OPENAI_API_KEY) {
   process.exit(1);
 }
 
-// const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-const openai = new OpenAI({
-  baseURL: 'https://jo3m4y06rnnwhaz.askbhunte.com/v1',
-  apiKey: 'ollama', // API key is required but not used by Ollama
-});
+const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
 
 const app = express();
 
