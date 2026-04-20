@@ -164,21 +164,18 @@ app.post('/api/session', async (req, res) => {
     // -----------------------------
     const shouldShow = parsed.show === true;
     const message = typeof parsed.message === 'string' ? parsed.message.trim() : '';
+    const message = typeof parsed?.message === 'string' && parsed.message.trim()
+    ? parsed.message.trim()
+    : 'hi i am working';
 
-    if (shouldShow && message) {
-      cooldowns.set(session.sessionId, Date.now());
-
-      return res.json({
-        show: true,
-        message,
-      });
-    }
+    cooldowns.set(session.sessionId, Date.now());
 
     return res.json({
-      show: true,
-       message,
-      
-    });
+  show: true,
+  message,
+});
+
+
 
   } catch (err) {
     console.error('[error] /api/session:', err);
