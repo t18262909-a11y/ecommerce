@@ -9,14 +9,14 @@ to show a single, personalized engagement popup.
 
 DECISION RULES:
 - Only show a message when there is a clear, meaningful trigger, such as:
-  * On a product page for more than ~90 seconds
+  * On a product page for more than ~5 seconds
   * Added item(s) to cart but drifted to other pages without checking out
   * Viewed 3+ different products (indecision signal)
-  * On cart page with items for more than ~60 seconds
+  * On cart page with items for more than ~10 seconds
   * Returned to the same product page multiple times
 - DO NOT show a message for:
   * Home page visits
-  * Sessions shorter than ~30 seconds
+  * Sessions shorter than ~5 seconds
   * Checkout page (don't interrupt a purchase in progress)
   * Sessions with no real engagement signal
 
