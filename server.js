@@ -1,8 +1,6 @@
 // server.js
 require('dotenv').config();
 const path = require('path');
-
-const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
