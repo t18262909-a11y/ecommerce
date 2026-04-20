@@ -163,7 +163,7 @@ app.post('/api/session', async (req, res) => {
     // NORMALIZATION
     // -----------------------------
     const shouldShow = parsed.show === true;
-    const message = typeof parsed.message === 'string' ? parsed.message.trim() : '';
+ 
     const message = typeof parsed?.message === 'string' && parsed.message.trim()
     ? parsed.message.trim()
     : 'hi i am working';
