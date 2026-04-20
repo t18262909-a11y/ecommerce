@@ -175,7 +175,7 @@ app.post('/api/session', async (req, res) => {
     }
 
     return res.json({
-      show: false,
+      show: true,
       reason: 'llm_rejected',
       debug: parsed,
     });
