@@ -3,6 +3,7 @@
 // asks OpenAI whether to show a popup, and returns the decision.
 
 require('dotenv').config();
+const path = require('path');
 
 const express = require('express');
 const cors = require('cors');
