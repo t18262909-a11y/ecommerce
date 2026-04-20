@@ -1,62 +1,46 @@
 // promptBuilder.js
-// Builds the system prompt and the structured user message for the LLM.
-// Keeping this in its own file makes it easy to tune the prompt without
-// touching server logic.
+// LLM is only responsible for GENERATING the message.
+// The show/no-show decision is made by rule-based scoring in server.js.
 
-const SYSTEM_PROMPT = `You are an e-commerce conversion intelligence system.
+const SYSTEM_PROMPT = `You are a conversion copywriter for a Shopify e-commerce store.
 
-Your job is NOT to be overly cautious.
-Your job is to estimate PURCHASE INTENT from session behavior.
+You will receive a JSON object with the user's session context and a computed intent score (0–100).
 
-You must evaluate intent on a scale internally and decide output accordingly.
+Your ONLY job: write ONE short, personalized popup message (1–2 sentences, max 120 characters).
 
-DECISION MODEL:
-- Low intent (0–40): show = false
-- Medium intent (41–70): show = true, but message should be more generic and less urgent
-- High intent (71–100): show = true
+TONE: Helpful nudge. Never pushy or spammy.
 
-STRONG INTENT SIGNALS:
-- Repeated product views
-- Cart activity (adding or modifying items)
-- Time spent on product pages (>15–30 seconds)
-- Multiple product comparisons (3+ products viewed)
-- Returning to same product page
-- Cart abandonment behavior
+CONTEXT-SPECIFIC GUIDELINES:
+- product page: highlight scarcity, social proof, or value ("Only a few left!", "Free shipping on orders over $50")
+- cart page with items: reinforce the decision ("Great picks — checkout before they sell out")
+- category/browsing: offer discovery hook ("Still exploring? Here's 10% off your first order")
+- high time on site (>2 min): address hesitation ("Still deciding? We offer free 30-day returns")
+- add_to_cart event seen: closing nudge ("Your cart is waiting — complete your order today")
+- wishlist event seen: convert from wish to buy ("Your saved item is still available — grab it now")
 
-WEAK SIGNALS (do not ignore them completely):
-- short sessions
-- browsing homepage
-- single product view
+RULES:
+- Do NOT mention discounts unless cart_items = 0 and time_on_site > 120
+- Do NOT use exclamation marks more than once
+- Keep it under 120 characters
 
-IMPORTANT RULES:
-- DO NOT default to false. You must reason about intent strength.
-- If uncertain, lean slightly toward MEDIUM intent, not zero.
-- Think like a conversion optimizer, not a risk manager.
+OUTPUT FORMAT — return ONLY valid JSON, nothing else:
+{"message": "your message here"}`;
 
-OUTPUT FORMAT:
-Return ONLY JSON:
-
-If show = true:
-{ "show": true, "message": "..." }
-
-If show = false:
-{ "show": false, "message": "" }`;
 /**
- * Build the messages array for the OpenAI chat completion call.
- * @param {object} session - session payload from the tracker
- * @returns {Array<{role: string, content: string}>}
+ * @param {object} session - normalized session from the tracker
+ * @param {number} intentScore - 0-100 rule-based score computed by server
  */
-function buildMessages(session) {
-  // Trim the events array to the last 20 to keep token usage reasonable
-  const trimmedEvents = Array.isArray(session.events)
-    ? session.events.slice(-20)
-    : [];
+function buildMessages(session, intentScore) {
+  const trimmedEvents = Array.isArray(session.events) ? session.events.slice(-20) : [];
 
   const userPayload = {
+    intent_score: intentScore,
     current_page: session.current_page || 'unknown',
     cart_items: session.cart_items ?? 0,
     time_on_site_seconds: session.time_on_site ?? 0,
     unique_products_viewed: session.unique_products_viewed ?? 0,
+    scroll_depth_pct: session.scroll_depth ?? 0,
+    page_time_seconds: session.page_time ?? 0,
     events: trimmedEvents,
   };
 

@@ -1,25 +1,23 @@
 // server.js
-// Express API that receives session events from the tracker,
-// asks OpenAI whether to show a popup, and returns the decision.
-
 require('dotenv').config();
 const path = require('path');
 
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const OpenAI = require('openai');
 
 const { buildMessages } = require('./promptBuilder');
-const { normalizeSession } = require('./normalizeSession');
 
 const {
   OPENAI_API_KEY,
   OPENAI_MODEL = 'gpt-4o-mini',
   PORT = 3000,
   ALLOWED_ORIGIN = '*',
-  MIN_SESSION_SECONDS = '25',
+  MIN_SESSION_SECONDS = '5',
   SESSION_COOLDOWN_MS = '120000',
+  INTENT_THRESHOLD = '25',
 } = process.env;
 
 if (!OPENAI_API_KEY) {
@@ -27,77 +25,128 @@ if (!OPENAI_API_KEY) {
   process.exit(1);
 }
 
+const openai = new OpenAI(
+  process.env.OPENROUTER_API_KEY
+    ? { baseURL: 'https://openrouter.ai/api/v1', apiKey: process.env.OPENROUTER_API_KEY }
+    : { apiKey: OPENAI_API_KEY }
+);
 
-// Support OpenAI or OpenRouter fallback
-let openai;
-if (OPENAI_API_KEY && OPENAI_API_KEY !== 'openrouter') {
-  openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-} else {
-  // OpenRouter fallback
-  openai = new OpenAI({
-    baseURL: 'https://openrouter.ai/api/v1',
-    apiKey: process.env.OPENROUTER_API_KEY || 'openrouter',
-  });
+// ---- Intent scoring (rule-based, no LLM) ----
+// Returns 0–100. If score >= INTENT_THRESHOLD we show a popup.
+function scoreIntent(session) {
+  let score = 0;
+  const events = Array.isArray(session.events) ? session.events : [];
+
+  // Time on site
+  const t = Number(session.time_on_site ?? 0);
+  if (t >= 180) score += 20;
+  else if (t >= 90)  score += 12;
+  else if (t >= 40)  score += 6;
+
+  // Current page type
+  const page = (session.current_page || '').toLowerCase();
+  if (page === 'cart')     score += 30;
+  else if (page === 'product')  score += 20;
+  else if (page === 'category') score += 10;
+
+  // Cart items
+  const cart = Number(session.cart_items ?? 0);
+  if (cart >= 2) score += 25;
+  else if (cart === 1) score += 15;
+
+  // Unique products viewed
+  const prods = Number(session.unique_products_viewed ?? 0);
+  if (prods >= 3) score += 20;
+  else if (prods >= 2) score += 12;
+  else if (prods >= 1) score += 5;
+
+  // Scroll depth on current page
+  const scroll = Number(session.scroll_depth ?? 0);
+  if (scroll >= 70) score += 10;
+  else if (scroll >= 40) score += 5;
+
+  // Time on current page
+  const pt = Number(session.page_time ?? 0);
+  if (pt >= 60) score += 15;
+  else if (pt >= 30) score += 8;
+
+  // Strong click events
+  const hasAddToCart   = events.some(e => e.element === 'add_to_cart');
+  const hasWishlist    = events.some(e => e.element === 'wishlist');
+  const hasFilter      = events.some(e => e.element === 'filter');
+  const hasCheckout    = events.some(e => e.element === 'checkout_click');
+  if (hasAddToCart)  score += 30;
+  if (hasWishlist)   score += 15;
+  if (hasCheckout)   score += 20;
+  if (hasFilter)     score += 8;
+
+  // Multiple page views in session
+  const pvCount = events.filter(e => e.type === 'page_view').length;
+  if (pvCount >= 4) score += 10;
+  else if (pvCount >= 2) score += 5;
+
+  return Math.min(score, 100);
 }
 
+// Fallback messages when LLM fails, keyed by page type
+const FALLBACK_MESSAGES = {
+  cart:     "Your cart is waiting — complete your order before items sell out.",
+  product:  "Loving what you see? Free shipping on orders over $50.",
+  category: "Still exploring? Here's 10% off your first order — use code WELCOME10.",
+  default:  "Great taste! Complete your order today and enjoy free returns.",
+};
 
+function fallbackMessage(page) {
+  return FALLBACK_MESSAGES[page] || FALLBACK_MESSAGES.default;
+}
+
+// ---- Express app ----
 const app = express();
-
-// ---- Middleware ----
 app.use(express.json({ limit: '100kb' }));
 
-const allowedOrigins = ALLOWED_ORIGIN.split(',').map((o) => o.trim());
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      // Allow no-origin (e.g. sendBeacon, curl) and matches
-      if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
-        return cb(null, true);
-      }
-      return cb(new Error(`CORS blocked: ${origin}`));
-    },
-    credentials: true, // Allow credentials for cross-origin requests
-  })
-);
+const allowedOrigins = ALLOWED_ORIGIN.split(',').map(o => o.trim());
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      return cb(null, true);
+    }
+    return cb(new Error(`CORS blocked: ${origin}`));
+  },
+  credentials: true,
+}));
 
-// Rate limit: 60 requests/minute per IP. Tracker sends ~2/min, so plenty of headroom.
-app.use(
-  '/api/',
-  rateLimit({
-    windowMs: 60 * 1000,
-    max: 60,
-    standardHeaders: true,
-    legacyHeaders: false,
-  })
-);
+app.use('/api/', rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 
-// ---- In-memory cooldown store ----
-// Simple Map<sessionId, lastShownTimestamp>. For production, swap for Redis.
+// ---- Cooldown store ----
 const cooldowns = new Map();
 
 function isInCooldown(sessionId) {
   const last = cooldowns.get(sessionId);
-  if (!last) return false;
-  return Date.now() - last < Number(SESSION_COOLDOWN_MS);
+  return last ? Date.now() - last < Number(SESSION_COOLDOWN_MS) : false;
 }
 
-// Periodic cleanup so the Map doesn't grow forever
 setInterval(() => {
   const cutoff = Date.now() - Number(SESSION_COOLDOWN_MS) * 2;
   for (const [id, ts] of cooldowns.entries()) {
     if (ts < cutoff) cooldowns.delete(id);
   }
-}, 60 * 1000).unref();
+}, 60_000).unref();
 
 // ---- Routes ----
-
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, model: OPENAI_MODEL });
+  res.json({ ok: true, model: OPENAI_MODEL, threshold: Number(INTENT_THRESHOLD) });
 });
+
 app.get('/snippet.js', (_req, res) => {
   res.type('application/javascript');
-  res.sendFile(path.join(__dirname, 'snippet.js'));
+  res.sendFile(path.join(__dirname, 'tracker.js'));
 });
+
 app.post('/api/session', async (req, res) => {
   try {
     const session = req.body || {};
@@ -107,12 +156,12 @@ app.post('/api/session', async (req, res) => {
     }
 
     const timeOnSite = Number(session.time_on_site ?? 0);
-
     if (timeOnSite < Number(MIN_SESSION_SECONDS)) {
       return res.json({ show: false, reason: 'session_too_short' });
     }
 
-    if (session.current_page === 'checkout') {
+    const page = (session.current_page || '').toLowerCase();
+    if (page === 'checkout') {
       return res.json({ show: false, reason: 'on_checkout' });
     }
 
@@ -120,69 +169,58 @@ app.post('/api/session', async (req, res) => {
       return res.json({ show: false, reason: 'cooldown' });
     }
 
-    const messages = buildMessages(session);
+    // Rule-based decision — LLM only generates the message
+    const intentScore = scoreIntent(session);
+    console.log(`[intent] sessionId=${session.sessionId} page=${page} score=${intentScore}`);
 
-    const completion = await openai.chat.completions.create({
-      model: OPENAI_MODEL,
-      messages,
-      temperature: 0.6,
-      max_tokens: 120,
-    });
+    if (intentScore < Number(INTENT_THRESHOLD)) {
+      return res.json({ show: false, reason: 'low_intent', score: intentScore });
+    }
 
-    const raw = completion.choices?.[0]?.message?.content || '';
-
-    console.log('[LLM RAW OUTPUT]', raw);
-
-    // -----------------------------
-    // SAFE JSON PARSING (FIXED)
-    // -----------------------------
-    let parsed = null;
-
+    // Ask LLM to generate a contextual message
+    let message = '';
     try {
-      parsed = JSON.parse(raw);
-    } catch (e) {
-      // fallback: extract JSON block
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          parsed = JSON.parse(match[0]);
-        } catch (err2) {
-          console.warn('[parse fail] extracted JSON invalid');
+      const messages = buildMessages(session, intentScore);
+      const completion = await openai.chat.completions.create({
+        model: OPENAI_MODEL,
+        messages,
+        temperature: 0.7,
+        max_tokens: 80,
+      });
+
+      const raw = (completion.choices?.[0]?.message?.content || '').trim();
+      console.log('[LLM RAW]', raw);
+
+      let parsed = null;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        const match = raw.match(/\{[\s\S]*\}/);
+        if (match) {
+          try { parsed = JSON.parse(match[0]); } catch { /* fall through */ }
         }
       }
+
+      if (parsed && typeof parsed.message === 'string' && parsed.message.trim()) {
+        message = parsed.message.trim();
+      }
+    } catch (llmErr) {
+      console.warn('[LLM error] falling back to static message:', llmErr.message);
     }
 
-    if (!parsed) {
-      return res.json({
-        show: false,
-        reason: 'invalid_json_from_llm',
-        debug: raw,
-      });
+    if (!message) {
+      message = fallbackMessage(page);
     }
-
-    // -----------------------------
-    // NORMALIZATION
-    // -----------------------------
-    const shouldShow = parsed.show === true;
- 
-    const message = typeof parsed?.message === 'string' && parsed.message.trim()
-    ? parsed.message.trim()
-    : 'hi i am working';
 
     cooldowns.set(session.sessionId, Date.now());
-
-    return res.json({
-  show: true,
-  message,
-});
-
-
+    return res.json({ show: true, message, score: intentScore });
 
   } catch (err) {
     console.error('[error] /api/session:', err);
     return res.status(500).json({ show: false, error: 'server_error' });
   }
 });
+
 app.listen(PORT, () => {
-  console.log(`[ok] Engagement API listening on :${PORT} (model: ${OPENAI_MODEL})`);
+  console.log(`[ok] Engagement API listening on :${PORT} (model: ${OPENAI_MODEL}, threshold: ${INTENT_THRESHOLD})`);
 });
