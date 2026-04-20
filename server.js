@@ -100,28 +100,24 @@ app.post('/api/session', async (req, res) => {
   try {
     const session = req.body || {};
 
-    // Basic validation
     if (!session.sessionId || typeof session.sessionId !== 'string') {
       return res.status(400).json({ show: false, error: 'Missing sessionId' });
     }
 
-    // Short-circuit: don't waste tokens on very short sessions
     const timeOnSite = Number(session.time_on_site ?? 0);
+
     if (timeOnSite < Number(MIN_SESSION_SECONDS)) {
       return res.json({ show: false, reason: 'session_too_short' });
     }
 
-    // Short-circuit: don't show on checkout
     if (session.current_page === 'checkout') {
       return res.json({ show: false, reason: 'on_checkout' });
     }
 
-    // Short-circuit: already shown recently for this session
     if (isInCooldown(session.sessionId)) {
       return res.json({ show: false, reason: 'cooldown' });
     }
 
-    // Ask the LLM
     const messages = buildMessages(session);
 
     const completion = await openai.chat.completions.create({
@@ -129,33 +125,65 @@ app.post('/api/session', async (req, res) => {
       messages,
       temperature: 0.6,
       max_tokens: 120,
-      response_format: { type: 'json_object' },
     });
 
-    const raw = completion.choices?.[0]?.message?.content || '{}';
+    const raw = completion.choices?.[0]?.message?.content || '';
 
-    let parsed;
+    console.log('[LLM RAW OUTPUT]', raw);
+
+    // -----------------------------
+    // SAFE JSON PARSING (FIXED)
+    // -----------------------------
+    let parsed = null;
+
     try {
       parsed = JSON.parse(raw);
-    } catch (err) {
-      console.warn('[warn] LLM returned non-JSON:', raw);
-      return res.json({ show: false, reason: 'parse_error' });
+    } catch (e) {
+      // fallback: extract JSON block
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch (err2) {
+          console.warn('[parse fail] extracted JSON invalid');
+        }
+      }
     }
 
-    // Normalize response
-    if (parsed.show === true && typeof parsed.message === 'string' && parsed.message.trim()) {
+    if (!parsed) {
+      return res.json({
+        show: false,
+        reason: 'invalid_json_from_llm',
+        debug: raw,
+      });
+    }
+
+    // -----------------------------
+    // NORMALIZATION
+    // -----------------------------
+    const shouldShow = parsed.show === true;
+    const message = typeof parsed.message === 'string' ? parsed.message.trim() : '';
+
+    if (shouldShow && message) {
       cooldowns.set(session.sessionId, Date.now());
-      return res.json({ show: true, message: parsed.message.trim() });
+
+      return res.json({
+        show: true,
+        message,
+      });
     }
 
-    return res.json({ show: false });
+    return res.json({
+      show: false,
+      reason: 'llm_rejected',
+      debug: parsed,
+    });
+
   } catch (err) {
-    console.error('[error] /api/session:', err.message);
-    // Fail closed — never show a popup on server error
+    console.error('[error] /api/session:', err);
     return res.status(500).json({ show: false, error: 'server_error' });
   }
 });
-
 app.listen(PORT, () => {
   console.log(`[ok] Engagement API listening on :${PORT} (model: ${OPENAI_MODEL})`);
 });
