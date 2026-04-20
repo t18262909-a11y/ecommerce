@@ -46,6 +46,7 @@ app.use(
       }
       return cb(new Error(`CORS blocked: ${origin}`));
     },
+    credentials: true, // Allow credentials for cross-origin requests
   })
 );
 
