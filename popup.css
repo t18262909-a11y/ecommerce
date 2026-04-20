@@ -1,0 +1,63 @@
+/* popup.css — reference copy of the popup styles.
+ * These are already inlined in tracker.js via injectStyles().
+ * This file exists so you can iterate on styling easily, then paste
+ * changes back into the injectStyles() function.
+ */
+
+#eng-popup {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  max-width: 340px;
+  background: #ffffff;
+  color: #1a1a1a;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  padding: 18px 44px 18px 20px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  z-index: 2147483647;
+  transform: translateY(20px);
+  opacity: 0;
+  transition: transform 0.35s ease, opacity 0.35s ease;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+#eng-popup.eng-visible {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+#eng-popup p {
+  margin: 0;
+  color: #1a1a1a;
+}
+
+#eng-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: transparent;
+  border: 0;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: #888;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+#eng-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #333;
+}
+
+@media (max-width: 480px) {
+  #eng-popup {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    max-width: none;
+  }
+}
