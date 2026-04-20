@@ -114,3 +114,23 @@ shopify-engagement/
 ├── snippet.js           ← built output (git-ignored, gets uploaded)
 └── README.md
 ```
+
+
+
+
+curl -X POST https://ecommerce-production-2e53.up.railway.app/api/session \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId":"abc456",
+    "current_page":"product",
+    "cart_items":1,
+    "time_on_site":210,
+    "unique_products_viewed":4,
+    "events":[
+      {"type":"page_view","page":"product","url":"/products/a"},
+      {"type":"page_view","page":"product","url":"/products/b"},
+      {"type":"click","element":"add_to_cart"},
+      {"type":"page_view","page":"product","url":"/products/c"},
+      {"type":"page_view","page":"product","url":"/products/d"}
+    ]
+  }'

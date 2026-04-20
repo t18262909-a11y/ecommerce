@@ -92,7 +92,10 @@ setInterval(() => {
 app.get('/health', (_req, res) => {
   res.json({ ok: true, model: OPENAI_MODEL });
 });
-
+app.get('/snippet.js', (_req, res) => {
+  res.type('application/javascript');
+  res.sendFile(path.join(__dirname, 'snippet.js'));
+});
 app.post('/api/session', async (req, res) => {
   try {
     const session = req.body || {};
