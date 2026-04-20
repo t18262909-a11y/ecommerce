@@ -1,4 +1,4 @@
-/* Shopify Engagement Snippet — built 2026-04-20T18:38:45.121Z */
+/* Shopify Engagement Snippet — built 2026-04-20T18:53:55.681Z */
 /* tracker.js — Shopify engagement tracker
  *
  * Usage (in theme.liquid, before </body>):
@@ -104,6 +104,26 @@
   var currentPage = classifyPage();
   pushEvent({ type: 'page_view', page: currentPage, url: window.location.pathname });
   if (currentPage === 'product') uniqueProducts.add(window.location.pathname);
+
+  // ---- Detect pre-existing cart on load ----
+  function detectCartOnLoad() {
+    try {
+      var count = 0;
+      if (window.Shopify && window.Shopify.cart && typeof window.Shopify.cart.item_count === 'number') {
+        count = window.Shopify.cart.item_count;
+      }
+      if (count > 0) {
+        pushEvent({ type: 'cart_loaded', cart_items: count, url: window.location.pathname });
+        setTimeout(sendSession, 1500);
+      }
+    } catch (_) {}
+  }
+  // Wait for Shopify cart object to be available
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', detectCartOnLoad);
+  } else {
+    setTimeout(detectCartOnLoad, 500);
+  }
 
   // Strong signals that warrant an immediate send (don't wait for the timer)
   var INSTANT_SEND_EVENTS = { add_to_cart: true, checkout_click: true, wishlist: true };

@@ -87,6 +87,10 @@ function scoreIntent(session) {
   const hasIdle = events.some(e => e.type === 'idle');
   if (hasIdle) score += 20;
 
+  // Cart already had items when page loaded (e.g. after reload)
+  const cartLoaded = events.find(e => e.type === 'cart_loaded');
+  if (cartLoaded) score += 35;
+
   return Math.min(score, 100);
 }
 
@@ -156,7 +160,8 @@ app.post('/api/session', async (req, res) => {
       return res.json({ show: false, reason: 'on_checkout' });
     }
 
-    if (isInCooldown(session.sessionId)) {
+    const hasCartOnLoad = Array.isArray(session.events) && session.events.some(e => e.type === 'cart_loaded');
+    if (!hasCartOnLoad && isInCooldown(session.sessionId)) {
       return res.json({ show: false, reason: 'cooldown' });
     }
 
