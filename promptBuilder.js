@@ -12,7 +12,7 @@ You must evaluate intent on a scale internally and decide output accordingly.
 
 DECISION MODEL:
 - Low intent (0–40): show = false
-- Medium intent (41–70): show = false, but close to threshold
+- Medium intent (41–70): show = true, but message should be more generic and less urgent
 - High intent (71–100): show = true
 
 STRONG INTENT SIGNALS:
