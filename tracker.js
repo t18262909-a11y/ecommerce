@@ -149,7 +149,6 @@
 
   function sendSession() {
     if (inFlight) return;
-    if (sessionStorage.getItem(POPUP_SHOWN_KEY) === '1') return;
     inFlight = true;
 
     fetch(API_BASE + '/api/session', {

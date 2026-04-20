@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const src = path.join(__dirname, 'tracker', 'tracker.js');
+const src = path.join(__dirname, 'tracker.js');
 const dest = path.join(__dirname, 'snippet.js');
 
 const code = fs.readFileSync(src, 'utf8');
