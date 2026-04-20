@@ -5,7 +5,6 @@
 require('dotenv').config();
 
 const express = require('express');
-const path = require('path');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const OpenAI = require('openai');
@@ -101,7 +100,28 @@ app.post('/api/session', async (req, res) => {
   try {
     const session = req.body || {};
 
-    // Always call the LLM, regardless of session state
+    // Basic validation
+    if (!session.sessionId || typeof session.sessionId !== 'string') {
+      return res.status(400).json({ show: false, error: 'Missing sessionId' });
+    }
+
+    // Short-circuit: don't waste tokens on very short sessions
+    const timeOnSite = Number(session.time_on_site ?? 0);
+    if (timeOnSite < Number(MIN_SESSION_SECONDS)) {
+      return res.json({ show: false, reason: 'session_too_short' });
+    }
+
+    // Short-circuit: don't show on checkout
+    if (session.current_page === 'checkout') {
+      return res.json({ show: false, reason: 'on_checkout' });
+    }
+
+    // Short-circuit: already shown recently for this session
+    if (isInCooldown(session.sessionId)) {
+      return res.json({ show: false, reason: 'cooldown' });
+    }
+
+    // Ask the LLM
     const messages = buildMessages(session);
 
     const completion = await openai.chat.completions.create({
