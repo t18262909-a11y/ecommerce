@@ -15,7 +15,7 @@ const {
   ALLOWED_ORIGIN = '*',
   MIN_SESSION_SECONDS = '5',
   SESSION_COOLDOWN_MS = '120000',
-  INTENT_THRESHOLD = '25',
+  INTENT_THRESHOLD = '5',
 } = process.env;
 
 if (!OPENAI_API_KEY) {
@@ -83,20 +83,13 @@ function scoreIntent(session) {
   if (pvCount >= 4) score += 10;
   else if (pvCount >= 2) score += 5;
 
+  // Idle — user paused, good moment to engage
+  const hasIdle = events.some(e => e.type === 'idle');
+  if (hasIdle) score += 20;
+
   return Math.min(score, 100);
 }
 
-// Fallback messages when LLM fails, keyed by page type
-const FALLBACK_MESSAGES = {
-  cart:     "Your cart is waiting — complete your order before items sell out.",
-  product:  "Loving what you see? Free shipping on orders over $50.",
-  category: "Still exploring? Here's 10% off your first order — use code WELCOME10.",
-  default:  "Great taste! Complete your order today and enjoy free returns.",
-};
-
-function fallbackMessage(page) {
-  return FALLBACK_MESSAGES[page] || FALLBACK_MESSAGES.default;
-}
 
 // ---- Express app ----
 const app = express();
@@ -203,11 +196,12 @@ app.post('/api/session', async (req, res) => {
         message = parsed.message.trim();
       }
     } catch (llmErr) {
-      console.warn('[LLM error] falling back to static message:', llmErr.message);
+      console.warn('[LLM error] skipping popup:', llmErr.message);
+      return res.json({ show: false, reason: 'llm_error' });
     }
 
     if (!message) {
-      message = fallbackMessage(page);
+      return res.json({ show: false, reason: 'empty_message' });
     }
 
     cooldowns.set(session.sessionId, Date.now());

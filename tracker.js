@@ -107,6 +107,21 @@
   // Strong signals that warrant an immediate send (don't wait for the timer)
   var INSTANT_SEND_EVENTS = { add_to_cart: true, checkout_click: true, wishlist: true };
 
+  // ---- Idle detection (fires after 20s of no mouse/keyboard/scroll activity) ----
+  var idleTimer = null;
+  var IDLE_MS = 20000;
+  function resetIdleTimer() {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(function () {
+      pushEvent({ type: 'idle', url: window.location.pathname });
+      sendSession();
+    }, IDLE_MS);
+  }
+  ['mousemove', 'keydown', 'touchstart', 'scroll'].forEach(function (evt) {
+    window.addEventListener(evt, resetIdleTimer, { passive: true });
+  });
+  resetIdleTimer();
+
   // ---- Click listener ----
   document.addEventListener('click', function (e) {
     var kind = classifyClick(e.target);
