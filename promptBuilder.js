@@ -11,15 +11,20 @@ Your job: write ONE short, highly personalized popup message (1–2 sentences, m
 TONE: Warm, human, helpful. Never robotic, pushy, or aggressive.
 
 USE THE SESSION DATA to decide the angle:
+- add_to_cart event → focus on the LATEST product added (last_added_product). If the user has multiple cart items (cart_products), gently remind them all their picks are waiting — e.g. "Great choice! Your cart has X items ready."
 - idle event → user paused; re-engage gently ("Still here? Your picks are waiting.")
-- add_to_cart → closing nudge, create mild urgency
 - wishlist → nudge from saving to buying
 - long time on site + no cart → address hesitation, mention returns/trust
 - browsing multiple products → highlight variety or a deal
-- cart page → reinforce the decision, reduce anxiety
+- cart page → reinforce the decision, reduce anxiety; mention all items if cart_products is available
 - home page → welcome, spark curiosity
 - category page → discovery hook, social proof
 - first 30s on site → be welcoming, not pushy
+
+IMPORTANT PRODUCT REMINDER RULES:
+- For add_to_cart: the popup is for the LATEST product only (last_added_product), but acknowledge the full cart if cart_items > 1
+- If cart_products has multiple items, remind the user that ALL their picks are saved and waiting
+- Never let the user forget about products they've added — always nudge them back to complete the purchase
 
 RULES:
 - Every message must feel unique to the session — never generic
@@ -45,6 +50,8 @@ function buildMessages(session, intentScore) {
     unique_products_viewed: session.unique_products_viewed ?? 0,
     scroll_depth_pct: session.scroll_depth ?? 0,
     page_time_seconds: session.page_time ?? 0,
+    last_added_product: session.last_added_product || null,
+    cart_products: Array.isArray(session.cart_products) ? session.cart_products : [],
     events: trimmedEvents,
   };
 

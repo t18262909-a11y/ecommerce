@@ -39,6 +39,8 @@
   // ---- Event buffer ----
   var events = [];
   var uniqueProducts = new Set();
+  var cartProducts = [];       // all products added to cart (URLs)
+  var lastAddedProduct = null; // most recently added product URL
 
   function pushEvent(evt) {
     evt.ts = Date.now();
@@ -147,6 +149,12 @@
     var kind = classifyClick(e.target);
     if (!kind) return;
     pushEvent({ type: 'click', element: kind, url: window.location.pathname });
+    if (kind === 'add_to_cart') {
+      lastAddedProduct = window.location.pathname;
+      if (cartProducts.indexOf(lastAddedProduct) === -1) {
+        cartProducts.push(lastAddedProduct);
+      }
+    }
     if (INSTANT_SEND_EVENTS[kind]) {
       // Small delay so Shopify can update cart state before we read it
       setTimeout(sendSession, 800);
@@ -175,6 +183,8 @@
       page_time:              Math.floor((Date.now() - pageStartTime) / 1000),
       scroll_depth:           maxScrollPct,
       unique_products_viewed: uniqueProducts.size,
+      last_added_product:     lastAddedProduct,
+      cart_products:          cartProducts.slice(),
       events:                 events.slice(),
     };
   }
